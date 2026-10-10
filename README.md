@@ -6,7 +6,7 @@ Built because I was tired of finding a perfect remote role, then seeing "US only
 
 ## What it does
 
-- Pulls 200+ jobs from Remotive, RemoteOK and We Work Remotely
+- Pulls 250+ jobs from 5 job boards: Remotive, RemoteOK, We Work Remotely, Jobicy and Himalayas
 - Cleans them into one format
 - Removes senior roles, unrelated fields and old postings
 - Skips jobs it has already sent you
