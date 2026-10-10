@@ -1,0 +1,535 @@
+{
+  "name": "Daily Job Finder",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -32,
+        288
+      ],
+      "id": "a48ce5ee-483c-40fa-bb8a-a024cf0f768f",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://remotive.com/api/remote-jobs?category=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        640,
+        0
+      ],
+      "id": "444fce27-5c8a-4934-bc8b-7480ca3bbf8a",
+      "name": "HTTP Request",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.all().map(i => i.json).filter(j => j.title);\nconst today = new Date().toISOString().slice(0, 10);\n\nlet html;\nif (jobs.length === 0) {\n  html = \"<p>No strong matches today. Check again tomorrow.</p>\";\n} else {\n  html = \"<h2>Today's top job matches</h2><ol>\" + jobs.map(j =>\n    `<li style=\"margin-bottom:14px\"><b>${j.title}</b> at ${j.company || \"Unknown company\"}<br>` +\n    `<b>Fit score: ${j.score}</b> | ${j.reason}<br>` +\n    `Location: ${j.location || \"Not listed, check the posting\"} | Source: ${j.source} | Posted: ${j.date}<br>` +\n    `<a href=\"${j.url}\">View and apply</a></li>`\n  ).join(\"\") + \"</ol>\";\n}\n\nreturn [{ json: { subject: `Job matches for ${today} (${jobs.length} strong)`, html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        288
+      ],
+      "id": "dd420a8f-f328-4239-ba79-9322a17a31c3",
+      "name": "Code in JavaScript1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "you@example.com",
+        "toEmail": "you@example.com",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2656,
+        288
+      ],
+      "id": "abb3e82a-023b-4d5c-aebd-1ddc5d67a084",
+      "name": "Send an Email",
+      "credentials": {
+        "smtp": {
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.first().json.jobs || [];\nreturn jobs.map(j => ({\n  json: {\n    title: j.title,\n    company: j.company_name,\n    location: j.candidate_required_location || \"\",\n    url: j.url,\n    date: (j.publication_date || \"\").slice(0, 10),\n    description: (j.description || \"\").replace(/<[^>]+>/g, \" \").slice(0, 1500),\n    source: \"Remotive\"\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        0
+      ],
+      "id": "b28730f4-ccd0-440e-895e-4a6cc5f707b0",
+      "name": "Clean Remotive",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "numberInputs": 5
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1088,
+        240
+      ],
+      "id": "30427144-5229-4184-baf4-a79fb178a053",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const titleWords = [\"data analyst\", \"business analyst\", \"bi analyst\",\n  \"business intelligence\", \"power bi\", \"reporting analyst\", \"analyst\", \"data\",\n  \"reporting\", \"bi developer\", \"analytics\", \"supply chain analyst\",\n  \"logistics analyst\", \"marketing analyst\", \"product analyst\",\n  \"automation specialist\", \"insights analyst\", \"operations analyst\", \"sales analyst\"];\n\nconst goodLocations = [\"worldwide\", \"anywhere\", \"africa\", \"nigeria\", \"lagos\",\n  \"emea\", \"global\", \"international\", \"work from anywhere\"];\n\n// whole-word matches only, so \"lead\" won't block \"lead generation\"\nconst badWords = [\"senior\", \"sr\", \"lead\", \"principal\", \"staff\", \"manager\",\n  \"director\", \"head of\", \"owner\", \"security\", \"crypto\", \"digital assets\", \"engineer\"];\nconst badRegex = new RegExp(\"\\\\b(\" + badWords.join(\"|\").replace(/\\./g, \"\\\\.\") + \")\\\\b\", \"i\");\n\nconst maxAgeDays = 7;\nconst cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;\nconst seen = new Set();\n\nreturn $input.all().filter(item => {\n  const title = (item.json.title || \"\").toLowerCase();\n  const loc = (item.json.location || \"\").toLowerCase().trim();\n  const url = item.json.url;\n  if (!url || seen.has(url)) return false;\n  seen.add(url);\n\n  const posted = Date.parse(item.json.date);\n  const recent = isNaN(posted) || posted >= cutoff;   // keep jobs with no date\n\n  const titleOk = titleWords.some(w => title.includes(w));\n  const notExcluded = !badRegex.test(title);\n\n  const locationOk = loc === \"\" || loc === \"remote\" ||\n    goodLocations.some(w => loc.includes(w));\n\n  return recent && titleOk && notExcluded && locationOk;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1536,
+        288
+      ],
+      "id": "5b181a2a-623a-4d05-8023-6b650f162ff6",
+      "name": "Filter Jobs",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://remoteok.com/api",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        640,
+        384
+      ],
+      "id": "515b8bd6-ddc9-4372-8f2c-dfef510eb382",
+      "name": "RemoteOK"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all()\n  .map(i => i.json)\n  .filter(j => j.position)\n  .map(j => ({\n    json: {\n      title: j.position,\n      company: j.company,\n      location: j.location || \"\",\n      url: j.url,\n      date: (j.date || \"\").slice(0, 10),\n      description: (j.description || \"\").replace(/<[^>]+>/g, \" \").slice(0, 1500),\n      source: \"RemoteOK\"\n    }\n  }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        384
+      ],
+      "id": "36123026-dde0-46b1-a286-2a4dd0c0769f",
+      "name": "Clean RemoteOK"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(i => i.json).map(j => {\n  const parts = (j.title || \"\").split(\":\");\n  const company = parts.length > 1 ? parts.shift().trim() : \"\";\n  return {\n    json: {\n      title: parts.join(\":\").trim(),\n      company,\n      location: \"\",\n      url: j.link,\n      date: (j.isoDate || j.pubDate || \"\").slice(0, 10),\n      description: (j.contentSnippet || j.content || \"\").replace(/<[^>]+>/g, \" \").slice(0, 1500),\n      source: \"We Work Remotely\"\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        576
+      ],
+      "id": "6129202e-3823-4301-936d-2f5888738754",
+      "name": "Clean WWR"
+    },
+    {
+      "parameters": {
+        "url": "https://weworkremotely.com/remote-jobs.rss",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        640,
+        576
+      ],
+      "id": "fde77290-5c31-4338-9181-0067910649ec",
+      "name": "WWR ",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENROUTER_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"openai/gpt-4o-mini\",\n  messages: [\n    { role: \"system\", content: \"You screen remote jobs for Adedeji, a Lagos, Nigeria-based data and business analyst with 3 years of analytics experience (Excel, SQL, PostgreSQL, Power BI, DAX, n8n, Zapier, AI automation) and 7 years in shipping and port logistics operations. He wants junior to mid-level analyst roles that accept candidates living in Nigeria. Reply ONLY with JSON: {\\\"score\\\": number 0-100, \\\"reason\\\": \\\"one short sentence\\\", \\\"location_ok\\\": true or false}. Set location_ok to false if the job is restricted to countries other than Nigeria or Africa, if the title or description names a specific country other than Nigeria, or if the location is not listed and the description does not clearly say the role is open worldwide, anywhere, or in Africa.\" },\n    { role: \"user\", content: \"Title: \" + $json.title + \"\\nCompany: \" + $json.company + \"\\nLocation: \" + ($json.location || \"not listed\") + \"\\nDescription: \" + ($json.description || \"none\") }\n  ]\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1984,
+        288
+      ],
+      "id": "47cac110-ee28-4d4d-8dee-964609da418d",
+      "name": "AI Score ",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const MIN_SCORE = 55;   // change this number to adjust how strict matches are\n\nconst jobs = $('Skip Seen Jobs').all();\nconst results = $input.all();\nconst out = [];\n\nresults.forEach((r, i) => {\n  const job = jobs[i] ? jobs[i].json : null;\n  if (!job || !job.title) return;\n\n  if (r.json.error) {\n    out.push({ json: { ...job, score: \"Not scored\", reason: \"AI scoring failed, check manually\" } });\n    return;\n  }\n\n  let parsed = { score: 0, reason: \"\", location_ok: false };\n  try {\n    const text = r.json.choices[0].message.content.replace(/```json|```/g, \"\").trim();\n    parsed = JSON.parse(text);\n  } catch (e) {\n    out.push({ json: { ...job, score: \"Not scored\", reason: \"Could not read AI reply, check manually\" } });\n    return;\n  }\n\n  const score = Number(parsed.score) || 0;\n  if (score >= MIN_SCORE && parsed.location_ok !== false) {\n    out.push({ json: { ...job, score: score, reason: parsed.reason } });\n  }\n});\n\nreturn out.sort((a, b) => (Number(b.json.score) || 0) - (Number(a.json.score) || 0));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        288
+      ],
+      "id": "149244ce-6e01-43b7-ad28-b6d7b5cd2eeb",
+      "name": "Parse Score",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        288
+      ],
+      "id": "cddb16f9-ab1e-405b-a0b9-ea61de78396a",
+      "name": "Skip Seen Jobs",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://hc-ping.com/YOUR-CHECK-ID",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2880,
+        288
+      ],
+      "id": "e6def854-cee0-418f-9e87-520e87c1b1bd",
+      "name": "Health Check",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://jobicy.com/api/v2/remote-jobs?count=50&tag=analyst",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        256
+      ],
+      "id": "14b92fd2-be40-4b84-98e5-09fbe12a4340",
+      "name": "Jobicy"
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.first().json.jobs || [];\nconst strip = h => (h || \"\").replace(/<[^>]*>/g, \" \").replace(/\\s+/g, \" \").trim().slice(0, 1500);\nreturn jobs.map(j => ({\n  json: {\n    title: j.jobTitle,\n    company: j.companyName,\n    location: j.jobGeo,\n    url: j.url,\n    date: j.pubDate,\n    description: strip(j.jobExcerpt || j.jobDescription),\n    source: \"Jobicy\"\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        192
+      ],
+      "id": "a305ae60-9871-49de-9269-a25fa0c8a021",
+      "name": "Clean Jobicy"
+    },
+    {
+      "parameters": {
+        "url": "https://himalayas.app/jobs/api/search?q=analyst&worldwide=true",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        160,
+        864
+      ],
+      "id": "ec28212f-b5cd-470e-bdac-3780d0cac0f8",
+      "name": "Himalayas"
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.first().json.jobs || [];\nconst strip = h => (h || \"\").replace(/<[^>]*>/g, \" \").replace(/\\s+/g, \" \").trim().slice(0, 1500);\nreturn jobs.map(j => {\n  const raw = j.pubDate;\n  const ms = typeof raw === \"number\" ? (raw < 1e12 ? raw * 1000 : raw) : Date.parse(raw);\n  const locs = (j.locationRestrictions || []).map(l => l.name).join(\", \");\n  return { json: {\n    title: j.title,\n    company: j.companyName,\n    location: locs || \"worldwide\",\n    url: j.applicationLink,\n    date: isNaN(ms) ? \"\" : new Date(ms).toISOString(),\n    description: strip(j.description || j.excerpt),\n    source: \"Himalayas\"\n  }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        1008
+      ],
+      "id": "5cd8bf70-6826-4840-b28f-79ce9f72b875",
+      "name": "Clean Himalayas"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WWR ",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RemoteOK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Himalayas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Jobicy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Clean Remotive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Remotive": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Filter Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        [
+          {
+            "node": "Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Jobs": {
+      "main": [
+        [
+          {
+            "node": "Skip Seen Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RemoteOK": {
+      "main": [
+        [
+          {
+            "node": "Clean RemoteOK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean RemoteOK": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Clean WWR": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "WWR ": {
+      "main": [
+        [
+          {
+            "node": "Clean WWR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Score ": {
+      "main": [
+        [
+          {
+            "node": "Parse Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Score": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Seen Jobs": {
+      "main": [
+        [
+          {
+            "node": "AI Score ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jobicy": {
+      "main": [
+        [
+          {
+            "node": "Clean Jobicy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Jobicy": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Himalayas": {
+      "main": [
+        [
+          {
+            "node": "Clean Himalayas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Himalayas": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "tags": []
+}
