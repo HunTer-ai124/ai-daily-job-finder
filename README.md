@@ -1,4 +1,5 @@
 # AI Daily Job Finder (n8n)
+v2 (October 2026): added Jobicy and Himalayas (5 boards in total), retry and continue-on-error for each board, and an AI location check that labels each job as eligible, restricted or unclear, with a quote from the posting. Restricted jobs are filtered out.
 
 An n8n workflow that finds remote jobs for you every few hours, scores them against your skills with AI, and emails you the best matches.
 
