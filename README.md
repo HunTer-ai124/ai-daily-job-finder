@@ -1,50 +1,16 @@
 # AI Daily Job Finder (n8n)
-v2 (October 2026): added Jobicy and Himalayas (5 boards in total), retry and continue-on-error for each board, and an AI location check that labels each job as eligible, restricted or unclear, with a quote from the posting. Restricted jobs are filtered out.
 
 An n8n workflow that finds remote jobs for you every few hours, scores them against your skills with AI, and emails you the best matches.
 
 Built because I was tired of finding a perfect remote role, then seeing "US only" at the bottom.
 
-## What it does
+## What's new in v2 (October 2026)
 
-- Pulls 250+ jobs from 5 job boards: Remotive, RemoteOK, We Work Remotely, Jobicy and Himalayas
-- Cleans them into one format
-- Removes senior roles, unrelated fields and old postings
-- Skips jobs it has already sent you
-- Scores each job from 0 to 100 against your skills with AI, and explains why
-- Emails you the best matches, ranked
-- Alerts your phone if it ever stops running
+- **- Pulls 300+ jobs from 5 job boards: Remotive, RemoteOK, We Work Remotely, Jobicy and Himalayas
+- **Location check:** the AI scores skill fit and location separately, and doesn't trust a "worldwide" label unless the job description supports it. Each job is labelled eligible, restricted or unclear, with a quote from the posting.
+- **Clear tags in the email:** every job is marked "Open worldwide" or "Location unclear, check before applying". Restricted jobs are removed.
+- **Full descriptions:** the clean nodes keep up to 4,000 characters, so the AI sees location rules hidden lower in the post.
+- **More reliable:** each job board retries 3 times, then the workflow continues with the other sources if one is down.
+- **Rate-limit safe:** AI scoring runs one job at a time with a short pause between requests.
 
-## What you need
-
-- n8n (self-hosted or n8n Cloud)
-- An email account to send from (Gmail works)
-- An OpenRouter API key for the AI scoring
-- A free healthchecks.io account for the uptime alert (optional)
-
-## Quick start
-
-1. Download `workflow.json` from this repo
-2. In n8n, go to **Workflows → Import from File** and select it
-3. Add your own email credentials and OpenRouter key
-4. Edit the skills and keywords to match your profile
-5. Activate the workflow
-
-> Never commit your API keys. The key placeholder in this file is `YOUR_OPENROUTER_KEY`.
-
-## Need help setting it up?
-
-Not technical, or short on time? I can help:
-
-- **Step-by-step setup guide** with screenshots for every step
-- **Done-for-you setup** on a live call, so it's running before we hang up
-- **Custom version** for your job focus, extra job boards, or alerts on WhatsApp instead of email
-
-The same approach also works for businesses: screening leads, sorting invoices or organising support tickets.
-
-**Message me on LinkedIn:** [linkedin.com/in/oluwasegunadedeji](https://www.linkedin.com/in/oluwasegunadedeji)
-**Email:** seguna670@gmail.com
-
----
-
-Built by Oluwasegun Adedeji, Data & Automation Analyst, Lagos.
+**Why:** v1 ran without errors but still sent jobs that were US only. A workflow that runs isn't the same as a workflow that's right.
